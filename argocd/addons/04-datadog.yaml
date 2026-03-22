@@ -1,0 +1,33 @@
+# Set datadog.datadog.clusterName to your AKS name (or use cluster_name_for_datadog in docs).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: datadog
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: addons
+  source:
+    repoURL: https://helm.datadoghq.com
+    chart: datadog
+    targetRevision: 3.74.0
+    helm:
+      values: |
+        datadog:
+          apiKeyExistingSecret: datadog-secret
+          apiKeyExistingSecretKey: api-key
+          site: datadoghq.com
+          clusterName: argocd-poc-aks
+        agents:
+          enabled: true
+        clusterAgent:
+          enabled: true
+          replicas: 1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: datadog
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
