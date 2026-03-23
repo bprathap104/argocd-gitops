@@ -31,7 +31,8 @@ spec:
               elements:
                 - component: datadog-operator
                   chart: datadog-operator
-                  targetRevision: "2.19.1"
+                  # Stable n-1 vs https://helm.datadoghq.com (latest stable chart 2.20.0; pin one release behind).
+                  targetRevision: "2.20.0"
                   syncWave: "-1"
                   helmValues: |
                     installCRDs: true
@@ -43,7 +44,7 @@ spec:
                         datadogMonitors: true
                 - component: datadog-agent
                   chart: datadog
-                  targetRevision: "3.129.0"
+                  targetRevision: "3.174.0"
                   syncWave: "1"
                   # Replaced with the Argo CD cluster name at render time (see template).
                   helmValues: |
