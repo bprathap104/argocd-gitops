@@ -1,33 +1,80 @@
-# Set datadog.datadog.clusterName to your AKS name (or use cluster_name_for_datadog in docs).
+# ApplicationSet: Datadog Operator + Agent across Argo CD-registered clusters.
+#
+# Multi-cluster / dev-only:
+# - Label each Argo CD cluster Secret (argocd namespace) with environment, e.g.:
+#     metadata.labels.environment: dev | staging | prod
+# - The cluster generator selector below only matches clusters where environment=dev.
+# - To target staging or all clusters, change matchLabels (or use matchExpressions).
+#
+# Application names: <cluster-name>-<component> (e.g. aks-dev-datadog-operator).
+#
+# Note: Operator + classic `datadog` chart can duplicate Agents; prefer one deployment model in prod.
 apiVersion: argoproj.io/v1alpha1
-kind: Application
+kind: ApplicationSet
 metadata:
-  name: datadog
+  name: datadog-stack
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  project: addons
-  source:
-    repoURL: https://helm.datadoghq.com
-    chart: datadog
-    targetRevision: 3.129.0
-    helm:
-      values: |
-        datadog:
-          apiKeyExistingSecret: datadog-secret
-          apiKeyExistingSecretKey: api-key
-          site: datadoghq.com
-          clusterName: argocd-poc-aks
-        agents:
-          enabled: true
-        clusterAgent:
-          enabled: true
-          replicas: 1
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: datadog
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          # Only clusters whose Secret has metadata.labels.environment: dev
+          - clusters:
+              selector:
+                matchLabels:
+                  environment: dev
+          - list:
+              elements:
+                - component: datadog-operator
+                  chart: datadog-operator
+                  targetRevision: "2.19.1"
+                  syncWave: "-1"
+                  helmValues: |
+                    installCRDs: true
+                    datadogCRDs:
+                      crds:
+                        datadogAgents: true
+                        datadogMetrics: true
+                        datadogPodAutoscalers: true
+                        datadogMonitors: true
+                - component: datadog-agent
+                  chart: datadog
+                  targetRevision: "3.129.0"
+                  syncWave: "1"
+                  # Replaced with the Argo CD cluster name at render time (see template).
+                  helmValues: |
+                    datadog:
+                      apiKeyExistingSecret: datadog-secret
+                      apiKeyExistingSecretKey: api-key
+                      site: datadoghq.com
+                      clusterName: "__CLUSTER_NAME__"
+                    agents:
+                      enabled: true
+                    clusterAgent:
+                      enabled: true
+                      replicas: 1
+  template:
+    metadata:
+      name: "{{ .name }}-{{ .component }}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{ .syncWave }}"
+    spec:
+      project: addons
+      source:
+        repoURL: https://helm.datadoghq.com
+        chart: "{{ .chart }}"
+        targetRevision: "{{ .targetRevision }}"
+        helm:
+          values: |
+            {{ replace "__CLUSTER_NAME__" .name .helmValues | nindent 12 }}
+      destination:
+        server: "{{ .server }}"
+        namespace: datadog
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
