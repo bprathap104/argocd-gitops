@@ -1,0 +1,124 @@
+# ApplicationSets for platform addons. Labels on Argo cluster Secrets come from Terraform
+# (gitops_addons + spoke_gitops_addons). ApplicationSet cluster generators only support label
+# selectors, not annotation selectors; the same flags are set as annotations on the Secret
+# (gitops_cluster_metadata / spoke_gitops_cluster_metadata) for auditing and policy.
+#
+# Required labels (set by 02_bootstrap defaults):
+#   cluster_role: hub | spoke
+#   ingress_nginx_gitops: "true"   — both hub and spoke (ingress ApplicationSet)
+#   argocd_from_git: "true"       — hub only (Argo CD ApplicationSet); omit on spoke
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  description: Git-managed ingress + optional Argo CD (hub only)
+  sourceRepos:
+    - https://kubernetes.github.io/ingress-nginx
+    - https://argoproj.github.io/argo-helm
+  destinations:
+    - namespace: "*"
+      server: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: argocd-gitops-hub
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  goTemplate: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: cluster_role
+              operator: In
+              values:
+                - hub
+            - key: argocd_from_git
+              operator: In
+              values:
+                - "true"
+  template:
+    metadata:
+      name: 'argocd-gitops-{{ .name | trunc 40 }}'
+      labels:
+        appset: argocd-gitops-hub
+        cluster: '{{ .name }}'
+    spec:
+      project: platform
+      source:
+        repoURL: https://argoproj.github.io/argo-helm
+        chart: argo-cd
+        targetRevision: 6.6.0
+        helm:
+          releaseName: argocd-gitops
+          values: |
+            global:
+              domain: argocd.local
+            configs:
+              params:
+                server.insecure: true
+            server:
+              ingress:
+                enabled: false
+      destination:
+        name: '{{ .name }}'
+        namespace: argocd-gitops
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ingress-nginx-all-clusters
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            ingress_nginx_gitops: "true"
+  template:
+    metadata:
+      name: 'ingress-nginx-gitops-{{ .name | trunc 40 }}'
+      labels:
+        appset: ingress-nginx-all-clusters
+        cluster: '{{ .name }}'
+    spec:
+      project: platform
+      source:
+        repoURL: https://kubernetes.github.io/ingress-nginx
+        chart: ingress-nginx
+        targetRevision: 4.12.1
+        helm:
+          releaseName: ingress-nginx-gitops
+          parameters:
+            - name: controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path
+              value: /healthz
+      destination:
+        name: '{{ .name }}'
+        namespace: ingress-nginx-gitops
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
