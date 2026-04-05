@@ -1,0 +1,42 @@
+# One ApplicationSet: one Application per immediate subdirectory under argocd/addons/.
+# Each subdirectory holds an ApplicationSet (or AppProject) manifest; sync applies
+# them to this cluster so child ApplicationSets can run.
+#
+# Set repoURL/revision to match your argocd-gitops remote (same as Terraform
+# argocd_gitops_repo_url / argocd_gitops_repo_revision).
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: addons-bootstrap
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://github.com/bprathap104/argocd-gitops.git
+        revision: main
+        directories:
+          - path: argocd/addons/*
+  template:
+    metadata:
+      name: 'addon-{{.path.basename}}'
+      labels:
+        argocd.argoproj.io/created-by: addons-bootstrap
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/bprathap104/argocd-gitops.git
+        targetRevision: main
+        path: "{{.path.path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
