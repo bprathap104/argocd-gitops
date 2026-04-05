@@ -3,9 +3,9 @@
 # Spoke: same chart is installed by Argo only (this ApplicationSet), same namespace/release
 # naming as the hub defaults for consistency.
 #
-# Cluster Secret labels (Terraform):
+# Cluster Secret labels (Terraform addons in tfvars):
 #   cluster_role: hub | spoke
-#   ingress_nginx_gitops: "true" on spoke — selects clusters for Git-managed ingress (hub omits this)
+#   enable_ingress_nginx: "true" on spoke — selects clusters for Git-managed ingress (hub uses TF for controller)
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -42,7 +42,7 @@ spec:
         selector:
           matchLabels:
             cluster_role: spoke
-            ingress_nginx_gitops: "true"
+            enable_ingress_nginx: "true"
   template:
     metadata:
       name: 'ingress-nginx-{{ .name | trunc 48 }}'
