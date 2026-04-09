@@ -22,7 +22,7 @@ spec:
         appset: istio-base-clusters
         cluster: '{{ .name }}'
     spec:
-      project: addons
+      project: platform
       source:
         repoURL: https://istio-release.storage.googleapis.com/charts
         chart: base

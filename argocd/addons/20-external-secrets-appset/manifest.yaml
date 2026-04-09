@@ -22,7 +22,7 @@ spec:
         appset: external-secrets-clusters
         cluster: '{{ .name }}'
     spec:
-      project: addons
+      project: platform
       source:
         repoURL: https://charts.external-secrets.io
         chart: external-secrets
