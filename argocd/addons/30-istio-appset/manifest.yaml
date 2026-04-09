@@ -1,0 +1,82 @@
+---
+# Installs Istio on every registered cluster whose Secret has
+# enable_istio=true.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: istio-base-clusters
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_istio: "true"
+  template:
+    metadata:
+      name: 'istio-base-{{ .name | trunc 48 }}'
+      labels:
+        appset: istio-base-clusters
+        cluster: '{{ .name }}'
+    spec:
+      project: addons
+      source:
+        repoURL: https://istio-release.storage.googleapis.com/charts
+        chart: base
+        targetRevision: 1.27.0
+        helm:
+          releaseName: istio-base
+      destination:
+        name: '{{ .name }}'
+        namespace: istio-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Istio control plane (istiod). Kept in a separate ApplicationSet so we can
+# reliably sequence it after the base CRDs.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: istiod-clusters
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  goTemplate: true
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            enable_istio: "true"
+  template:
+    metadata:
+      name: 'istiod-{{ .name | trunc 48 }}'
+      labels:
+        appset: istiod-clusters
+        cluster: '{{ .name }}'
+    spec:
+      project: addons
+      source:
+        repoURL: https://istio-release.storage.googleapis.com/charts
+        chart: istiod
+        targetRevision: 1.27.0
+        helm:
+          releaseName: istiod
+      destination:
+        name: '{{ .name }}'
+        namespace: istio-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

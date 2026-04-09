@@ -32,6 +32,7 @@ spec:
   description: Cluster addons (External Secrets Operator, etc.) via ApplicationSet
   sourceRepos:
     - https://charts.external-secrets.io
+    - https://istio-release.storage.googleapis.com/charts
   destinations:
     - namespace: "*"
       server: "*"
