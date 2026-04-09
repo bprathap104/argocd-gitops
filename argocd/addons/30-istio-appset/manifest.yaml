@@ -63,7 +63,7 @@ spec:
         appset: istiod-clusters
         cluster: '{{ .name }}'
     spec:
-      project: addons
+      project: platform
       source:
         repoURL: https://istio-release.storage.googleapis.com/charts
         chart: istiod
